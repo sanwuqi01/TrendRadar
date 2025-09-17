@@ -8,66 +8,59 @@ crawler:
   use_proxy: false # 是否启用代理，false 时为关闭
   default_proxy: "http://127.0.0.1:10086"
 
-# 去重设置
-deduplication:
-  enabled: true # 启用去重，基于标题和URL
-  window: "24h" # 去重时间窗口，24小时内重复内容不推送
+# 🔸 daily（当日汇总模式）
+#   • 推送时机：按时推送
+#   • 显示内容：当日所有匹配新闻 + 新增新闻区域
+#   • 适用场景：日报总结、全面了解当日热点趋势
+#
+# 🔸 current（当前榜单模式）
+#   • 推送时机：按时推送
+#   • 显示内容：当前榜单匹配新闻 + 新增新闻区域
+#   • 适用场景：实时热点追踪、了解当前最火的内容
+#
+# 🔸 incremental（增量监控模式）
+#   • 推送时机：有新增才推送
+#   • 显示内容：新出现的匹配频率词新闻
+#   • 适用场景：避免重复信息干扰
 
-# 时区设置
-timezone: "Asia/Shanghai" # 确保定时任务按北京时间运行
+report:
+  mode: "daily" # 可选: "daily"|"incremental"|"current"
+  rank_threshold: 5 # 排名高亮阈值
 
 notification:
-  enable_notification: true # 启用通知功能
-  message_batch_size: 4000 # 消息分批大小（字节）
-  dingtalk_batch_size: 20000 # 钉钉消息分批大小（字节）
+  enable_notification: true # 是否启用通知功能，如果 false，则不发送手机通知
+  message_batch_size: 4000 # 消息分批大小（字节）(这个配置别动)
+  dingtalk_batch_size: 20000 # 钉钉消息分批大小（字节）(这个配置也别动)
   batch_send_interval: 1 # 批次发送间隔（秒）
   feishu_message_separator: "━━━━━━━━━━━━━━━━━━━" # feishu 消息分割线
 
   silent_push:
-    enabled: false # 禁用静默推送，使用任务定时推送
+    enabled: false  # 是否启用静默推送模式，如果 true，则启用
+    # 因为我们白嫖的 github 服务器执行时间不稳定，所以时间范围要根据实际尽可能大一点，留足 2 小时
+    # 如果你想寻求稳定的按时的推送，建议通过 docker 部署在个人的服务器上
     time_range:
-      start: "20:00"
-      end: "22:00"
-    once_per_day: true
-    push_record_retention_days: 7
+      start: "20:00"  # 推送时间范围开始（北京时间）
+      end: "22:00"    # 推送时间范围结束（北京时间）
+    once_per_day: true  # 每天在时间范围内只推送一次，如果 false，则时间范围内每次执行都推送一次
+    push_record_retention_days: 7  # 推送记录保留天数
 
+  # 请务必妥善保管好 webhooks，不要公开
+  # 如果你以 fork 的方式将本项目部署在 GitHub 上，请勿在此填写任何 webhooks，而是将 webhooks 填入 GitHub Secret
+  # 不然轻则手机上收到奇怪的广告推送，重则存在一定的安全隐患
   webhooks:
-    feishu_url: "${{ secrets.FEISHU_WEBHOOK_URL }}" # 从 GitHub Secrets 获取
+    feishu_url: "" # 飞书机器人的 webhook URL
     dingtalk_url: "" # 钉钉机器人的 webhook URL
     wework_url: "" # 企业微信机器人的 webhook URL
     telegram_bot_token: "" # Telegram Bot Token
     telegram_chat_id: "" # Telegram Chat ID
 
-  # 飞书消息模板
-  feishu_message_template: |
-    {
-      "msg_type": "interactive",
-      "card": {
-        "header": {
-          "title": {
-            "tag": "plain_text",
-            "content": "{{description}} - {{timestamp}}"
-          }
-        },
-        "elements": [
-          {
-            "tag": "div",
-            "text": {
-              "tag": "lark_md",
-              "content": "**标题数量**: {{total_titles}}\n**内容**: {{text}}"
-            }
-          }
-        ]
-      }
-    }
-
-# 用于让关注度更高的新闻在更前面显示
+# 用于让关注度更高的新闻在更前面显示，即用算法重新组合不同平台的热搜排序形成你侧重的热搜，合起来是 1 就行
 weight:
   rank_weight: 0.6 # 排名权重
   frequency_weight: 0.3 # 频次权重
   hotness_weight: 0.1 # 热度权重
 
-# 监控的平台
+# name 可以定义任意名称，只具有显示作用，即使项目运行了几天后，忽然改掉 name 也不会影响代码的正常运行
 platforms:
   - id: "toutiao"
     name: "今日头条"
@@ -91,35 +84,3 @@ platforms:
     name: "抖音"
   - id: "zhihu"
     name: "知乎"
-
-# 关键词筛选（可选）
-keywords:
-  - "科技"
-  - "AI"
-  - "财经"
-
-# 定时任务配置
-tasks:
-  - name: investor_incremental
-    schedule: "0 2 * * *" # 每日10:00 (UTC, 2:00 + 8h = 10:00 CST)
-    mode: incremental # 增量模式，仅推送新增资讯
-    rank_threshold: 5 # 排名高亮阈值
-    description: "📈 投资者/交易员 - 新增资讯"
-
-  - name: creator_current_morning
-    schedule: "0 0 * * *" # 每日08:00 (UTC, 0:00 + 8h = 08:00 CST)
-    mode: current # 实时热点模式
-    rank_threshold: 5
-    description: "📰 自媒体人/内容创作者 - 实时热点"
-
-  - name: creator_current_afternoon
-    schedule: "0 6 * * *" # 每日14:00 (UTC, 6:00 + 8h = 14:00 CST)
-    mode: current # 实时热点模式
-    rank_threshold: 5
-    description: "📰 自媒体人/内容创作者 - 实时热点"
-
-  - name: manager_daily
-    schedule: "0 1 * * *" # 每日09:00 (UTC, 1:00 + 8h = 09:00 CST)
-    mode: daily # 完整日报模式
-    rank_threshold: 5
-    description: "📋 企业管理者/普通用户 - 每日汇总"
